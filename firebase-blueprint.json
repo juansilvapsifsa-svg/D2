@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Game Room",
+      "description": "A session for two players to play DESCOLGA2.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string", "enum": ["waiting", "playing", "finished"] },
+        "players": { 
+          "type": "object",
+          "properties": {
+            "p1": { "type": "string", "description": "UID of player 1" },
+            "p2": { "type": "string", "description": "UID of player 2" }
+          }
+        },
+        "gameState": {
+          "type": "object",
+          "properties": {
+            "currentCardIndex": { "type": "number" },
+            "deck": { "type": "array", "items": { "type": "string" } },
+            "hotConsent": {
+              "type": "object",
+              "properties": {
+                "p1": { "type": "boolean" },
+                "p2": { "type": "boolean" }
+              }
+            }
+          }
+        },
+        "reactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "userId": { "type": "string" },
+              "timestamp": { "type": "number" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "status", "players", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "The main game session document."
+    }
+  }
+}
