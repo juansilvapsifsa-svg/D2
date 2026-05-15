@@ -11,8 +11,10 @@ import {
   Heart,
   X,
   Share2,
-  Lock
+  Lock,
+  Smile
 } from 'lucide-react';
+import EmojiPicker, { Theme, EmojiStyle } from 'emoji-picker-react';
 import { db, auth } from './lib/firebase';
 import { 
   doc, 
@@ -81,7 +83,7 @@ const CardCategoryBadge = ({ category }: { category: string }) => {
     deep: 'Profundo',
     fun: 'Divertido',
     hot: 'Picante',
-    cultural: 'Federal / Regional',
+    cultural: 'Cultura / Regional',
   };
 
   return (
@@ -95,6 +97,18 @@ const CardCategoryBadge = ({ category }: { category: string }) => {
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [guestId] = useState(() => {
+    const existing = localStorage.getItem('d2_guest_id');
+    if (existing) return existing;
+    const newId = 'gst_' + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem('d2_guest_id', newId);
+    return newId;
+  });
+
+  // We prioritize Firebase Auth if available, otherwise fallback to guestId
+  // but we try to keep it stable during a session.
+  const currentUid = useMemo(() => user?.uid || guestId, [user?.uid, guestId]);
   const [room, setRoom] = useState<Room | null>(null);
   const [view, setView] = useState<'landing' | 'lobby' | 'game' | 'solo' | 'rules'>('landing');
   const [roomCode, setRoomCode] = useState('');
@@ -103,10 +117,21 @@ export default function App() {
   const [soloIndex, setSoloIndex] = useState(0);
   const [soloDeck, setSoloDeck] = useState<string[]>([]);
   const [showEndScreen, setShowEndScreen] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        setUser(u);
+      } else {
+        try {
+          const cred = await signInAnonymously(auth);
+          setUser(cred.user);
+        } catch (err) {
+          console.error("Anonymous sign-in failed:", err);
+        }
+      }
+      setIsAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
@@ -129,12 +154,10 @@ export default function App() {
     const code = urlParams.get('room');
     if (code) {
       setRoomCode(code.toUpperCase());
-      // Instant auto-join attempt if code is in URL
-      if (user) {
-        joinRoom(code.toUpperCase());
-      }
+      // Instant auto-join attempt
+      joinRoom(code.toUpperCase());
     }
-  }, [user]); // Re-run when user auth is ready
+  }, []); // Run on mount
 
   useEffect(() => {
     if (room?.id) {
@@ -151,44 +174,38 @@ export default function App() {
     }
   }, [room?.id]);
 
-  const validateAuthAndRun = async (action: () => Promise<void>) => {
-    if (!user) {
-      await login();
-      return;
-    }
-    await action();
-  };
-
   const createRoom = async () => {
-    await validateAuthAndRun(async () => {
-      setLoading(true);
-      const code = generateRoomCode();
-      const shuffledDeck = CARDS.map(c => c.id).sort(() => Math.random() - 0.5);
-      
-      const newRoom: Room = {
-        id: code,
-        status: 'waiting',
-        players: { p1: auth.currentUser!.uid, p2: null },
-        playerNames: { [auth.currentUser!.uid]: auth.currentUser!.displayName || 'Jugador 1' },
-        gameState: {
-          currentCardIndex: 0,
-          deck: shuffledDeck,
-          hotConsent: {}
-        },
-        reactions: [],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
+    setError('');
+    setLoading(true);
+    const code = generateRoomCode();
+    const shuffledDeck = CARDS.map(c => c.id).sort(() => Math.random() - 0.5);
+    
+    const newRoom: Room = {
+      id: code,
+      status: 'waiting',
+      players: { p1: currentUid, p2: null },
+      playerNames: { [currentUid]: user?.displayName || 'Descolgado 1' },
+      gameState: {
+        currentCardIndex: 0,
+        deck: shuffledDeck,
+        hotConsent: {}
+      },
+      reactions: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
 
-      try {
-        await setDoc(doc(db, 'rooms', code), newRoom);
-        setRoom(newRoom);
-        setView('lobby');
-      } catch (err) {
-        setError('Error al crear la sala');
-      }
+    try {
+      const roomRef = doc(db, 'rooms', code);
+      await setDoc(roomRef, newRoom);
+      setRoom(newRoom);
+      setView('lobby');
+    } catch (err) {
+      console.error("Firestore Error in createRoom:", err);
+      setError('No se pudo crear la sala. Revisá tu conexión.');
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   const joinRoom = async (code: string) => {
@@ -196,34 +213,41 @@ export default function App() {
       setError('Ingresá un código');
       return;
     }
-    await validateAuthAndRun(async () => {
-      const currentUid = auth.currentUser!.uid;
-      setLoading(true);
-      try {
-        const roomRef = doc(db, 'rooms', code);
-        const roomSnap = await getDoc(roomRef);
-        if (roomSnap.exists()) {
-          const roomData = roomSnap.data() as Room;
-          if (roomData.players.p2 && roomData.players.p2 !== currentUid) {
-            setError('La sala ya está llena');
-          } else {
-            await updateDoc(roomRef, {
-              'players.p2': currentUid,
-              [`playerNames.${currentUid}`]: auth.currentUser!.displayName || 'Jugador 2',
-              status: 'playing',
-              updatedAt: serverTimestamp()
-            });
-            setRoom({ ...roomData, players: { ...roomData.players, p2: currentUid } });
-            setView('game');
-          }
+    setError('');
+    setLoading(true);
+    try {
+      const roomRef = doc(db, 'rooms', code);
+      const roomSnap = await getDoc(roomRef);
+      if (roomSnap.exists()) {
+        const roomData = roomSnap.data() as Room;
+        if (roomData.players.p2 && roomData.players.p2 !== currentUid && roomData.players.p1 !== currentUid) {
+          setError('La sala ya está llena');
         } else {
-          setError('No se encontró la sala');
+          // If we are p1 reconnecting, or joining as p2
+          const isPlayer1 = roomData.players.p1 === currentUid;
+          const updateData: any = {
+            updatedAt: serverTimestamp()
+          };
+          
+          if (!isPlayer1 && !roomData.players.p2) {
+            updateData['players.p2'] = currentUid;
+            updateData[`playerNames.${currentUid}`] = user?.displayName || 'Descolgado 2';
+            updateData.status = 'playing';
+          }
+
+          await updateDoc(roomRef, updateData);
+          setRoom(roomData);
+          setView(roomData.status === 'waiting' && isPlayer1 ? 'lobby' : 'game');
         }
-      } catch (err) {
-        setError('Error al unirse a la sala');
+      } else {
+        setError('No se encontró la sala. Verificá el código.');
       }
+    } catch (err) {
+      console.error("Firestore Error in joinRoom:", err);
+      setError('Error al unirse a la sala.');
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   const startSolo = () => {
@@ -277,19 +301,19 @@ export default function App() {
   };
 
   const giveConsent = async (consent: boolean) => {
-    if (!room || !user) return;
+    if (!room) return;
     await updateDoc(doc(db, 'rooms', room.id), {
-      [`gameState.hotConsent.${user.uid}`]: consent,
+      [`gameState.hotConsent.${currentUid}`]: consent,
       updatedAt: serverTimestamp()
     });
   };
 
   const sendReaction = async (emoji: string) => {
-    if (!room || !user) return;
+    if (!room) return;
     const reaction: Reaction = {
       id: Math.random().toString(36).substring(2),
       type: emoji,
-      userId: user.uid,
+      userId: currentUid,
       timestamp: Date.now()
     };
     await updateDoc(doc(db, 'rooms', room.id), {
@@ -313,10 +337,16 @@ export default function App() {
   }, [room?.reactions]);
 
   const currentCard = useMemo(() => {
-    if (view === 'solo') return CARDS.find(c => c.id === soloDeck[soloIndex]);
-    if (room) return CARDS.find(c => c.id === room.gameState.deck[room.gameState.currentCardIndex]);
+    if (view === 'solo') {
+      const cardId = soloDeck[soloIndex];
+      return cardId ? CARDS.find(c => c.id === cardId) : null;
+    }
+    if (room && room.gameState && room.gameState.deck) {
+      const cardId = room.gameState.deck[room.gameState.currentCardIndex];
+      return cardId ? CARDS.find(c => c.id === cardId) : null;
+    }
     return null;
-  }, [room?.gameState.currentCardIndex, soloIndex, view]);
+  }, [room?.gameState?.currentCardIndex, soloIndex, view, soloDeck]);
 
   const bothConsented = useMemo(() => {
     if (!room) return false;
@@ -331,9 +361,9 @@ export default function App() {
   }, [room?.gameState.hotConsent]);
 
   const hasWaitingConsent = useMemo(() => {
-    if (!room || !user) return false;
-    return room.gameState.hotConsent[user.uid] === undefined;
-  }, [room?.gameState.hotConsent, user?.uid]);
+    if (!room) return false;
+    return room.gameState.hotConsent[currentUid] === undefined;
+  }, [room?.gameState.hotConsent, currentUid]);
 
   // --- Views ---
 
@@ -356,36 +386,56 @@ export default function App() {
         </p>
       </motion.div>
 
-      <div className="space-y-4 w-full max-w-xs">
-        <button onClick={createRoom} disabled={loading} className="btn-vibrant w-full flex items-center justify-center gap-2">
-          {loading ? 'Cargando...' : <><Plus size={20} /> Crear Sala</>}
+      <div className="space-y-6 w-full max-w-sm">
+        <button 
+          onClick={createRoom} 
+          disabled={loading} 
+          className="w-full bg-gradient-to-r from-rose-600 to-purple-600 p-5 rounded-[24px] shadow-2xl shadow-rose-900/40 hover:scale-[1.02] active:scale-[0.98] transition-all flex flex-col items-center gap-1 group"
+        >
+          <div className="flex items-center gap-2">
+            <Plus size={24} className="text-white" />
+            <span className="text-xl font-black uppercase tracking-tighter">Empezar una Sala</span>
+          </div>
+          <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest leading-none">Instantáneo • Sin Registro</span>
         </button>
         
-        <div className="relative pt-4 pb-2">
-          <div className="absolute inset-0 flex items-center px-4"><div className="w-full border-t border-white/5"></div></div>
-          <span className="relative bg-[#0d0d1a] px-2 text-[10px] text-zinc-600 uppercase font-bold tracking-widest">o unirse</span>
+        <div className="p-1 rounded-[24px] bg-white/5 border border-white/10">
+          <div className="p-6 space-y-4">
+            <p className="text-[10px] text-zinc-500 uppercase font-black tracking-[0.2em]">O unirse a una existente</p>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="CÓDIGO DE SALA" 
+                className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex-1 text-center font-mono focus:outline-none focus:border-rose-500/50 uppercase text-white placeholder:text-zinc-700 tracking-[0.2em]"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value)}
+              />
+              <button 
+                onClick={() => joinRoom(roomCode)} 
+                className="bg-zinc-800 hover:bg-zinc-700 px-6 rounded-xl flex items-center justify-center transition-colors"
+                disabled={loading}
+              >
+                <span className="font-black text-sm uppercase">Ir</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <input 
-            type="text" 
-            placeholder="CÓDIGO" 
-            className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 flex-1 text-center font-mono focus:outline-none focus:border-rose-500/50 uppercase text-white placeholder:text-zinc-700"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value)}
-          />
-          <button onClick={() => joinRoom(roomCode)} className="btn-outline px-4 flex items-center justify-center">
-            <ChevronRight size={24} />
+        <div className="flex justify-center gap-6 pt-4">
+          <button onClick={startSolo} className="text-zinc-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest flex flex-col items-center gap-2">
+            <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center">
+              <User size={16} />
+            </div>
+            Modo Solo
+          </button>
+          
+          <button onClick={() => setView('rules')} className="text-zinc-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest flex flex-col items-center gap-2">
+            <div className="w-10 h-10 rounded-full border border-white/5 flex items-center justify-center">
+              <HelpCircle size={16} />
+            </div>
+            Reglas
           </button>
         </div>
-
-        <button onClick={startSolo} className="text-zinc-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 pt-6">
-          <User size={14} /> Modo Solo
-        </button>
-        
-        <button onClick={() => setView('rules')} className="text-zinc-600 hover:text-zinc-400 text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1 mt-2">
-          <HelpCircle size={12} /> Cómo jugar
-        </button>
       </div>
 
       {error && <p className="mt-6 text-rose-500 text-sm font-medium animate-pulse">{error}</p>}
@@ -411,10 +461,29 @@ export default function App() {
           <QRCodeSVG value={`${window.location.origin}?room=${room?.id}`} size={200} level="H" />
         </div>
 
-        <div className="glass bg-white/5 border border-white/10 p-5 rounded-2xl mb-8">
+        <div className="glass bg-white/5 border border-white/10 p-5 rounded-2xl mb-4">
           <p className="text-[10px] text-zinc-600 uppercase font-black tracking-[0.2em] mb-2">Código de Sala</p>
           <p className="text-4xl font-mono font-black text-white tracking-widest">{room?.id}</p>
         </div>
+
+        <button 
+          onClick={() => {
+            const url = `${window.location.origin}?room=${room?.id}`;
+            if (navigator.share) {
+              navigator.share({
+                title: 'Descolga2',
+                text: '¡Unite a mi sala de Descolga2 para charlar en serio!',
+                url: url
+              });
+            } else {
+              navigator.clipboard.writeText(url);
+              alert('¡Enlace copiado al portapapeles!');
+            }
+          }}
+          className="w-full mb-8 bg-zinc-800 hover:bg-zinc-700 py-3 rounded-xl flex items-center justify-center gap-2 transition-colors text-[10px] font-black uppercase tracking-widest text-zinc-300"
+        >
+          <Share2 size={14} /> Compartir Enlace
+        </button>
 
         <div className="flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest text-zinc-400">
           <motion.div 
@@ -672,9 +741,9 @@ export default function App() {
 
           {/* Right Controls Sidebar */}
           <div className="col-span-1 md:col-span-3 flex flex-col gap-8 items-center md:items-end w-full">
-            <div className="w-full">
+            <div className="w-full relative">
               <p className="text-[10px] uppercase font-black tracking-widest text-zinc-500 mb-4 text-center md:text-right px-2 leading-none">Reacciones</p>
-              <div className="grid grid-cols-5 md:grid-cols-2 gap-3 w-full">
+              <div className="grid grid-cols-6 md:grid-cols-2 gap-3 w-full">
                 {[
                   { e: '🧉', l: 'Mate' },
                   { e: '😂', l: 'Jaja' },
@@ -691,7 +760,44 @@ export default function App() {
                     <span className="text-[8px] uppercase font-black text-zinc-500 tracking-widest hidden md:block">{l}</span>
                   </button>
                 ))}
+                <button 
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 p-3 glass rounded-2xl transition-all active:scale-90",
+                    showEmojiPicker ? "bg-rose-500/20 border-rose-500/50" : "hover:bg-white/10"
+                  )}
+                >
+                  <Smile size={24} className={showEmojiPicker ? "text-rose-400" : "text-zinc-400"} />
+                  <span className="text-[8px] uppercase font-black text-zinc-500 tracking-widest hidden md:block">Más</span>
+                </button>
               </div>
+
+              {/* Advanced Emoji Picker Flyout/Modal */}
+              <AnimatePresence>
+                {showEmojiPicker && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                    className="absolute bottom-full right-0 mb-4 z-50 shadow-2xl rounded-[32px] overflow-hidden border border-white/10"
+                  >
+                    <div className="bg-[#0d0d1a] p-1">
+                      <EmojiPicker 
+                        theme={Theme.DARK}
+                        emojiStyle={EmojiStyle.NATIVE}
+                        onEmojiClick={(emojiData) => {
+                          sendReaction(emojiData.emoji);
+                          setShowEmojiPicker(false);
+                        }}
+                        lazyLoadEmojis={true}
+                        searchDisabled={false}
+                        width={300}
+                        height={400}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             <div className="mt-auto w-full group flex gap-3">

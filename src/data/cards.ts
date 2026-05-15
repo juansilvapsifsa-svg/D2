@@ -48,7 +48,7 @@ export const CARDS: Card[] = [
   { id: '31', category: 'cultural', text: 'Describí cómo se siente el viento patagónico en la cara sin usar la palabra "viento" ni "frío".' },
   { id: '32', category: 'cultural', text: '¿Cómo pedirías una "docena de empanadas" si quisieras que el otro adivine que sos de Salta?' },
   { id: '33', category: 'cultural', text: 'Usá el término "bondi" o "subte" en una queja típica de un porteño en hora pico.' },
-  { id: '34', category: 'cultural', text: '¿Qué es lo más "federal" que hay en tu heladera ahora mismo? (¿Salame de Tandil? ¿Vino de San Juan?)' },
+  { id: '34', category: 'cultural', text: '¿Qué es lo más "típico" que hay en tu heladera ahora mismo? (¿Salame de Tandil? ¿Vino de San Juan?)' },
   { id: '35', category: 'cultural', text: 'Si tuviéramos que elegir una provincia para irnos a vivir un año "descolgados" de todo, ¿cuál sería y por qué?' },
   { id: '36', category: 'cultural', text: 'Contá una leyenda urbana de tu pueblo o ciudad (tipo la luz mala o el pomberito) como si estuviéramos en un fogón.' },
 

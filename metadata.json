@@ -1,6 +1,6 @@
 {
   "name": "DESCOLGA2",
-  "description": "DESCOLGA2: Animate a charlar en serio. Un juego de cartas interactivo para tu primera cita con retos federales y momentos picantes.",
+  "description": "DESCOLGA2: Animate a charlar en serio. Un juego de cartas interactivo para tu primera cita con retos descolgados y momentos picantes.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
