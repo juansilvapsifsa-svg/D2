@@ -41,16 +41,16 @@ export const CARDS: Card[] = [
   { id: '26', category: 'fun', text: 'Contá una anécdota de cuando estabas re "descolgado/a" en una situación importante.' },
 
   // CULTURAL / REGIONAL (10)
-  { id: '27', category: 'cultural', text: 'Decí una frase típica de Córdoba sin usar la palabra "culiao" (imposible challenge).' },
-  { id: '28', category: 'cultural', text: 'Explicá qué es un "choco" o usá el término "pando" en una frase como si fueras de Mendoza.' },
-  { id: '29', category: 'cultural', text: 'Imitá a un tucumano diciendo "¡Eh, pingo!" con todo el sentimiento.' },
-  { id: '30', category: 'cultural', text: '¿Cómo pedirías un "refuerzo" o un "angá" si estuvieras en el Litoral?' },
-  { id: '31', category: 'cultural', text: 'Describí cómo se siente el viento en la Patagonia sin usar la palabra "frío".' },
-  { id: '32', category: 'cultural', text: 'Si fueras del norte, ¿cómo convencerías a alguien de que tus empanadas son las mejores del país?' },
-  { id: '33', category: 'cultural', text: '¿Cuál es el modismo de tu zona que más te gusta y qué significa?' },
-  { id: '34', category: 'cultural', text: '¿Qué es lo más "federal" que hay en tu heladera ahora mismo?' },
-  { id: '35', category: 'cultural', text: 'Si tuviéramos que elegir una provincia para vivir un año, ¿cuál elegirías y por qué?' },
-  { id: '36', category: 'cultural', text: 'Contá una leyenda urbana de tu ciudad/pueblo que te daba miedo de chico/a.' },
+  { id: '27', category: 'cultural', text: 'Imitá a un cordobés pidiendo un "ferné con coca" y que el otro adivine de qué barrio de Córdoba podrías ser.' },
+  { id: '28', category: 'cultural', text: '¿Qué es un "choco" o estar "pando"? Explicámelo como si estuviéramos en una plaza de Mendoza.' },
+  { id: '29', category: 'cultural', text: 'Usá la palabra "pingo" en tres contextos diferentes (sin ser ordinario/a) como un auténtico tucumano.' },
+  { id: '30', category: 'cultural', text: 'Si estuviéramos en Misiones y te digo "¡Ay, angá!", ¿qué creés que te estoy queriendo decir?' },
+  { id: '31', category: 'cultural', text: 'Describí cómo se siente el viento patagónico en la cara sin usar la palabra "viento" ni "frío".' },
+  { id: '32', category: 'cultural', text: '¿Cómo pedirías una "docena de empanadas" si quisieras que el otro adivine que sos de Salta?' },
+  { id: '33', category: 'cultural', text: 'Usá el término "bondi" o "subte" en una queja típica de un porteño en hora pico.' },
+  { id: '34', category: 'cultural', text: '¿Qué es lo más "federal" que hay en tu heladera ahora mismo? (¿Salame de Tandil? ¿Vino de San Juan?)' },
+  { id: '35', category: 'cultural', text: 'Si tuviéramos que elegir una provincia para irnos a vivir un año "descolgados" de todo, ¿cuál sería y por qué?' },
+  { id: '36', category: 'cultural', text: 'Contá una leyenda urbana de tu pueblo o ciudad (tipo la luz mala o el pomberito) como si estuviéramos en un fogón.' },
 
   // HOT (4)
   { id: '37', category: 'hot', isHot: true, text: '¿Qué es lo que físicamente más te llamó la atención de mí cuando me viste hoy?' },

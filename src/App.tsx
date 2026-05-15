@@ -102,6 +102,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [soloIndex, setSoloIndex] = useState(0);
   const [soloDeck, setSoloDeck] = useState<string[]>([]);
+  const [showEndScreen, setShowEndScreen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -128,8 +129,12 @@ export default function App() {
     const code = urlParams.get('room');
     if (code) {
       setRoomCode(code.toUpperCase());
+      // Instant auto-join attempt if code is in URL
+      if (user) {
+        joinRoom(code.toUpperCase());
+      }
     }
-  }, []);
+  }, [user]); // Re-run when user auth is ready
 
   useEffect(() => {
     if (room?.id) {
@@ -225,8 +230,39 @@ export default function App() {
     const shuffledDeck = CARDS.map(c => c.id).sort(() => Math.random() - 0.5);
     setSoloDeck(shuffledDeck);
     setSoloIndex(0);
+    setShowEndScreen(false);
     setView('solo');
   };
+
+  const navigateSolo = (direction: 'next' | 'prev') => {
+    if (direction === 'next') {
+      if (soloIndex < soloDeck.length - 1) {
+        setSoloIndex(v => v + 1);
+      } else {
+        confetti({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        setShowEndScreen(true);
+      }
+    } else {
+      if (soloIndex > 0) {
+        setSoloIndex(v => v - 1);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (view === 'solo' && !showEndScreen) {
+        if (e.key === 'ArrowRight') navigateSolo('next');
+        if (e.key === 'ArrowLeft') navigateSolo('prev');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view, soloIndex, soloDeck, showEndScreen]);
 
   const handleNextCard = async () => {
     if (!room) return;
@@ -407,23 +443,45 @@ export default function App() {
         <div className="space-y-6 text-left text-zinc-400 text-xs font-bold leading-relaxed uppercase tracking-widest">
           <div className="flex gap-4">
             <span className="text-rose-500 font-black">01.</span>
-            <p><b>DESCOLGA2</b> es para conectar sin filtros. Pasen por 40 cartas diseñadas para el primer encuentro.</p>
+            <p><b>DESCOLGA2</b> es para conectar sin filtros. Pasen por 40 cartas diseñadas para un primer encuentro inolvidable.</p>
           </div>
           <div className="flex gap-4">
             <span className="text-rose-500 font-black">02.</span>
-            <p>Las cartas <b>HOT</b> son opcionales: solo se revelan si ambos descolgados dan su consentimiento.</p>
+            <p>Las cartas <b>HOT</b> son opcionales: solo se revelan si ambos aceptan la propuesta en el momento.</p>
           </div>
           <div className="flex gap-4">
             <span className="text-rose-500 font-black">03.</span>
-            <p>Usen las <b>REACCIONES</b> en vivo para que el otro sepa qué onda con la pregunta o el tema.</p>
+            <p>Usen las <b>REACCIONES</b> en vivo para que el otro sepa qué sentís con cada pregunta o desafío.</p>
           </div>
           <div className="flex gap-4">
             <span className="text-rose-500 font-black">04.</span>
-            <p>No hay puntajes. No hay ganadores. Solo anécdotas, risas y modismos federales.</p>
+            <p>No hay puntajes ni ganadores. El único objetivo es pasar un buen momento y charlar en serio.</p>
           </div>
         </div>
         <button onClick={() => setView('landing')} className="btn-vibrant w-full mt-10">¡VAMOS!</button>
       </div>
+    </div>
+  );
+
+  const EndGameView = () => (
+    <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="glass-heavy p-10 rounded-[40px] max-w-sm w-full"
+      >
+        <div className="w-20 h-20 bg-gradient-to-br from-rose-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-purple-500/20">
+          <Heart fill="white" size={40} />
+        </div>
+        <h2 className="text-3xl font-black italic tracking-tighter mb-4">¡FIN DEL VIAJE!</h2>
+        <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest mb-10 leading-relaxed px-4">
+          Pasaron por todas las cartas. Esperamos que se hayan descolgado un poco y conocido de verdad.
+        </p>
+        <div className="space-y-4">
+          <button onClick={() => setView('landing')} className="btn-vibrant w-full">VOLVER AL INICIO</button>
+          <p className="text-[10px] text-zinc-600 font-black tracking-widest uppercase">Animate a charlar en serio</p>
+        </div>
+      </motion.div>
     </div>
   );
 
@@ -433,6 +491,8 @@ export default function App() {
     const waitingForOthers = isHot && view !== 'solo' && !bothConsented && !anyDenied && !hasWaitingConsent;
     const accessDenied = isHot && view !== 'solo' && anyDenied;
     const currentIndex = view === 'solo' ? soloIndex : (room?.gameState.currentCardIndex || 0);
+
+    if (showEndScreen) return <EndGameView />;
 
     return (
       <div className="flex flex-col h-screen relative z-10">
@@ -509,10 +569,15 @@ export default function App() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentCard?.id || 'empty'}
-                initial={{ rotateY: 90, opacity: 0 }}
-                animate={{ rotateY: 0, opacity: 1 }}
-                exit={{ rotateY: -90, opacity: 0 }}
-                transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                initial={{ rotateY: 90, opacity: 0, scale: 0.9 }}
+                animate={{ rotateY: 0, opacity: 1, scale: 1 }}
+                exit={{ rotateY: -90, opacity: 0, scale: 0.9 }}
+                transition={{ 
+                  type: "spring", 
+                  damping: 20, 
+                  stiffness: 100,
+                  mass: 0.8
+                }}
                 className={cn(
                   "glass-heavy p-10 w-full max-w-sm aspect-[3/4] flex flex-col items-center justify-center relative",
                   isHot && !showHotContent && "border-rose-500/30"
@@ -586,6 +651,17 @@ export default function App() {
                 </div>
 
                 <div className="absolute bottom-8 left-0 w-full text-center">
+                  <div className="md:hidden flex justify-center gap-1 mb-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div 
+                        key={i} 
+                        className={cn(
+                          "w-1 h-1 rounded-full",
+                          Math.floor(currentIndex / 8) === i ? "bg-rose-500 scale-125" : "bg-white/10"
+                        )} 
+                      />
+                    ))}
+                  </div>
                   <p className="text-[10px] text-rose-400 font-black tracking-[0.3em] uppercase">
                     DESCOLGA2
                   </p>
@@ -618,30 +694,29 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-auto w-full group">
+            <div className="mt-auto w-full group flex gap-3">
+              {view === 'solo' && soloIndex > 0 && (
+                <button 
+                  onClick={() => navigateSolo('prev')}
+                  className="glass p-4 rounded-2xl hover:bg-white/10 transition-colors active:scale-90"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+              )}
               <button 
                 disabled={isHot && !showHotContent && !anyDenied}
                 onClick={() => {
                   if (view === 'solo') {
-                    if (soloIndex < soloDeck.length - 1) {
-                      setSoloIndex(soloIndex + 1);
-                    } else {
-                      confetti({
-                        particleCount: 150,
-                        spread: 70,
-                        origin: { y: 0.6 }
-                      });
-                      setView('landing');
-                    }
+                    navigateSolo('next');
                   } else {
                     handleNextCard();
                   }
                 }} 
-                className="w-full bg-gradient-to-r from-rose-500 to-purple-600 p-px rounded-2xl overflow-hidden transition-transform active:scale-95"
+                className="flex-1 bg-gradient-to-r from-rose-500 to-purple-600 p-px rounded-2xl overflow-hidden transition-transform active:scale-95"
               >
                 <div className="w-full bg-[#0d0d1a] hover:bg-transparent transition-colors rounded-[15px] py-4 px-6 flex justify-between items-center group-disabled:opacity-50">
                   <span className="font-black uppercase text-[10px] tracking-[0.2em]">
-                    {currentIndex === 39 ? 'TERMINAR' : 'SIGUIENTE'}
+                    {currentIndex === 39 ? 'FINALIZAR' : 'SIGUIENTE'}
                   </span>
                   <span className="text-xl">→</span>
                 </div>
